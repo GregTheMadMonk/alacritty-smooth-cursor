@@ -599,6 +599,31 @@ This section documents the *[cursor]* table of the configuration file.
 
 	Default: _0.15_
 
+Options introduced by smooth-cursor fork:
+
+*smooth_motion* = _true_ | _false_
+
+	When _true_, enables cursor motion smoothing. Switching to _false_ will
+	disable the effect and stop forced redraws of the window, but won't revert
+	the changes made to cursor blending.
+
+*smooth_motion_factor* = _<float>_
+
+	Determines how fast the cursor will reach its target position. Cursor
+	coordinates each frame could be expressed with the following formula:
+	`new = old \* (1 - factor) + target \* factor`.
+
+*smooth_motion_spring* = _<float>_
+
+	Slows down motion of the sides of the cursor rect opposite to the motion
+	direction by multiplying their *smooth_motion_factor* by this number.
+
+*block_replace_shape* = _<string>_
+
+	The way block cursor is rendered is wacky and might not look the best for
+	every one. This option allows to replace it with any other supported cursor
+	shape (I prefer *underline*).
+
 # TERMINAL
 
 This section documents the *[terminal]* table of the configuration file.

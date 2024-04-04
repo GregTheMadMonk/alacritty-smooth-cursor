@@ -161,20 +161,11 @@ impl Iterator for RenderableContent<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let cell = self.terminal_content.display_iter.next()?;
-            let mut cell = RenderableCell::new(self, cell);
+            let cell = RenderableCell::new(self, cell);
 
             if self.cursor_point == cell.point {
                 // Store the cursor which should be rendered.
                 self.cursor = self.renderable_cursor(&cell);
-                if self.cursor.shape == CursorShape::Block {
-                    cell.fg = self.cursor.text_color;
-                    cell.bg = self.cursor.cursor_color;
-
-                    // Since we draw Block cursor by drawing cell below it with a proper color,
-                    // we must adjust alpha to make it visible.
-                    cell.bg_alpha = 1.;
-                }
-
                 return Some(cell);
             } else if !cell.is_empty() && !cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
                 // Skip empty cells and wide char spacers.
