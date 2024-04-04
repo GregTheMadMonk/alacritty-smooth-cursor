@@ -16,6 +16,47 @@ https://aur.archlinux.org/packages/alacritty-smooth-cursor-git .
 
 This branch contains the following patches:
 
+### smooth-cursor
+
+This patch introduces basic cursor animations to Alacritty in a rather simple
+way.
+It replaces the block cursor render by a rectangle with a changed blend mode and
+triggers a surface re-render every frame when the window is visible.
+
+<p align="center">
+    <img width="100%" alt="Alacritty smooth cursor demo" src="https://raw.githubusercontent.com/GregTheMadMonk/alacritty-smooth-cursor/refs/heads/patch/smooth-cursor/extra/demo.gif">
+</p>
+
+#### Known issues
+
+* When I tried running this with Waylad, I got a lot of artifacts and it didn't
+  update as smooth in general. Running via XWayland (`env -u WAYLAND_DISPLAY alacritty`)
+  works though
+* Currently redraws are dumb and update the window every frame even if nothing
+  has changed. Expect a little GPU usage in idle.
+* "Spring" effect looks nice, but may be annoying when the cursor jumps around a
+  lot. TODO: Implement a restriction on how much the cursor size may change
+  during movement
+* Block cursor may look really off due to blending hack that essentially just
+  inverts the character color. It is recommended to replace it with "underline"
+  (see config or GIF demo)
+
+#### Configure
+
+Add/change the following entries in your `alacritty.toml`:
+
+```toml
+[cursor]
+# Set to false to disable completely
+smooth_motion = true
+# 0.0 = cursor is not moving, 1.0 = cursor moves instantly
+smooth_motion_factor = 0.2
+# 0.0 = broken, 1.0 = cursor shape is unaffected by movement
+smooth_motion_spring = 0.5
+# Override "block" cursor if you don't like how it looks in this fork
+# I prefer "underline"
+block_replace_shape = "underline"
+```
 _Back to the original README..._
 
 <hr>
