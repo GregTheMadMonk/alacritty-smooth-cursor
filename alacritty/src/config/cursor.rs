@@ -19,6 +19,11 @@ pub struct Cursor {
     pub style: ConfigCursorStyle,
     pub vi_mode_style: Option<ConfigCursorStyle>,
     pub unfocused_hollow: bool,
+    pub smooth_motion: bool,
+    pub smooth_motion_factor: f32,
+    pub smooth_motion_spring: f32,
+
+    block_replace_shape: Option<ConfigCursorStyle>,
 
     thickness: Percentage,
     blink_interval: u64,
@@ -30,6 +35,10 @@ impl Default for Cursor {
         Self {
             thickness: Percentage::new(0.15),
             unfocused_hollow: true,
+            smooth_motion: true,
+            smooth_motion_factor: 0.2,
+            smooth_motion_spring: 0.8,
+            block_replace_shape: None,
             blink_interval: 750,
             blink_timeout: 5,
             style: Default::default(),
@@ -47,6 +56,11 @@ impl Cursor {
     #[inline]
     pub fn style(self) -> VteCursorStyle {
         self.style.into()
+    }
+
+    #[inline]
+    pub fn block_replace_shape(self) -> Option<VteCursorStyle> {
+        self.block_replace_shape.map(Into::into)
     }
 
     #[inline]
