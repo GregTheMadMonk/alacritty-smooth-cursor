@@ -31,6 +31,33 @@ impl RenderRect {
     pub fn new(x: f32, y: f32, width: f32, height: f32, color: Rgb, alpha: f32) -> Self {
         RenderRect { kind: RectKind::Normal, x, y, width, height, color, alpha }
     }
+    pub fn new_cur(x: f32, y: f32, width: f32, height: f32, color: Rgb, alpha: f32) -> Self {
+        RenderRect { kind: RectKind::Inverting, x, y, width, height, color, alpha }
+    }
+
+    pub fn interpolate(&self, other: &RenderRect, factor: f32, spring: f32) -> Self {
+        let interp = |x: f32, y: f32, f: f32| x * (1.0 - f) + y * f;
+
+        let dx = other.x - self.x;
+        let dy = other.y - self.y;
+
+        let x1_fac = factor * if dx < 0.0 { 1.0 } else { spring };
+        let y1_fac = factor * if dy < 0.0 { 1.0 } else { spring };
+        let x2_fac = factor * if dx > 0.0 { 1.0 } else { spring };
+        let y2_fac = factor * if dy > 0.0 { 1.0 } else { spring };
+
+        let x1 = interp(self.x, other.x, x1_fac);
+        let y1 = interp(self.y, other.y, y1_fac);
+
+        let x2 = interp(self.x + self.width, other.x + other.width, x2_fac);
+        let y2 = interp(self.y + self.height, other.y + other.height, y2_fac);
+
+        RenderRect {
+            x: x1, y: y1, width: x2 - x1, height: y2 - y1,
+            color: other.color, alpha: other.alpha,
+            kind: other.kind
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -44,11 +71,12 @@ pub struct RenderLine {
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RectKind {
-    Normal = 0,
-    Undercurl = 1,
-    DottedUnderline = 2,
-    DashedUnderline = 3,
-    NumKinds = 4,
+    Inverting = 0,
+    Normal = 1,
+    Undercurl = 2,
+    DottedUnderline = 3,
+    DashedUnderline = 4,
+    NumKinds = 5,
 }
 
 impl RenderLine {
@@ -250,8 +278,8 @@ pub struct RectRenderer {
     vao: GLuint,
     vbo: GLuint,
 
-    programs: [RectShaderProgram; 4],
-    vertices: [Vec<Vertex>; 4],
+    programs: [RectShaderProgram; RectKind::NumKinds as usize],
+    vertices: [Vec<Vertex>; RectKind::NumKinds as usize],
 }
 
 impl RectRenderer {
@@ -259,6 +287,7 @@ impl RectRenderer {
         let mut vao: GLuint = 0;
         let mut vbo: GLuint = 0;
 
+        let inverting_program = RectShaderProgram::new(shader_version, RectKind::Inverting)?;
         let rect_program = RectShaderProgram::new(shader_version, RectKind::Normal)?;
         let undercurl_program = RectShaderProgram::new(shader_version, RectKind::Undercurl)?;
         // This shader has way more ALU operations than other rect shaders, so use a fallback
@@ -313,7 +342,7 @@ impl RectRenderer {
             gl::BindBuffer(gl::ARRAY_BUFFER, 0);
         }
 
-        let programs = [rect_program, undercurl_program, dotted_program, dashed_program];
+        let programs = [inverting_program, rect_program, undercurl_program, dotted_program, dashed_program];
         Ok(Self { vao, vbo, programs, vertices: Default::default() })
     }
 
@@ -338,7 +367,7 @@ impl RectRenderer {
         unsafe {
             // We iterate in reverse order to draw plain rects at the end, since we want visual
             // bell or damage rects be above the lines.
-            for rect_kind in (RectKind::Normal as u8..RectKind::NumKinds as u8).rev() {
+            for rect_kind in (RectKind::Inverting as u8..RectKind::NumKinds as u8).rev() {
                 let vertices = &mut self.vertices[rect_kind as usize];
                 if vertices.is_empty() {
                     continue;
@@ -347,6 +376,12 @@ impl RectRenderer {
                 let program = &self.programs[rect_kind as usize];
                 gl::UseProgram(program.id());
                 program.update_uniforms(size_info, metrics);
+
+                if rect_kind == RectKind::Inverting as u8 {
+                    gl::BlendFunc(gl::ONE_MINUS_DST_COLOR, gl::ONE_MINUS_SRC_ALPHA);
+                } else {
+                    gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+                }
 
                 // Upload accumulated undercurl vertices.
                 gl::BufferData(

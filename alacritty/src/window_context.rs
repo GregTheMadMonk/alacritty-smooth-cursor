@@ -370,7 +370,7 @@ impl WindowContext {
             return;
         }
 
-        self.dirty = false;
+        if !self.config.cursor.smooth_motion { self.dirty = false; }
 
         // Force the display to process any pending display update.
         self.display.process_renderer_update();
