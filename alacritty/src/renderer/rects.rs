@@ -35,7 +35,14 @@ impl RenderRect {
         RenderRect { kind: RectKind::Inverting, x, y, width, height, color, alpha }
     }
 
-    pub fn interpolate(&self, other: &RenderRect, factor: f32, spring: f32) -> Self {
+    pub fn interpolate(
+        &self,
+        other: &RenderRect,
+        factor: f32,
+        spring: f32,
+        max_s_x: f32,
+        max_s_y: f32
+    ) -> Self {
         let interp = |x: f32, y: f32, f: f32| x * (1.0 - f) + y * f;
 
         let dx = other.x - self.x;
@@ -46,11 +53,36 @@ impl RenderRect {
         let x2_fac = factor * if dx > 0.0 { 1.0 } else { spring };
         let y2_fac = factor * if dy > 0.0 { 1.0 } else { spring };
 
-        let x1 = interp(self.x, other.x, x1_fac);
-        let y1 = interp(self.y, other.y, y1_fac);
+        let mut x1 = interp(self.x, other.x, x1_fac);
+        let mut y1 = interp(self.y, other.y, y1_fac);
 
-        let x2 = interp(self.x + self.width, other.x + other.width, x2_fac);
-        let y2 = interp(self.y + self.height, other.y + other.height, y2_fac);
+        let mut x2 = interp(
+            self.x + self.width, other.x + other.width, x2_fac
+        );
+        let mut y2 = interp(
+            self.y + self.height, other.y + other.height, y2_fac
+        );
+
+        let width     = x2 - x1;
+        let max_width = other.width * max_s_x;
+
+        let height     = y2 - y1;
+        let max_height = other.height * max_s_y;
+
+        let width  = if width  > max_width  { max_width  } else { width  };
+        let height = if height > max_height { max_height } else { height };
+
+        if dx < 0.0 {
+            x1 = x2 - width;
+        } else {
+            x2 = x1 + width;
+        }
+
+        if dy < 0.0 {
+            y1 = y2 - height;
+        } else {
+            y2 = y1 + height;
+        }
 
         RenderRect {
             x: x1, y: y1, width: x2 - x1, height: y2 - y1,

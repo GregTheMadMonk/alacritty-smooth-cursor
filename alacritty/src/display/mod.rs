@@ -909,7 +909,9 @@ impl Display {
                     crcts.interpolate(
                         &new_cur_rects,
                         config.cursor.smooth_motion_factor,
-                        config.cursor.smooth_motion_spring
+                        config.cursor.smooth_motion_spring,
+                        config.cursor.smooth_motion_max_stretch_x,
+                        config.cursor.smooth_motion_max_stretch_y
                     ),
             };
         } else {

@@ -53,6 +53,9 @@ smooth_motion = true
 smooth_motion_factor = 0.2
 # 0.0 = broken, 1.0 = cursor shape is unaffected by movement
 smooth_motion_spring = 0.5
+# Limits how the cursor size may change
+smooth_motion_max_stretch_x = 3.0
+smooth_motion_max_stretch_y = 3.0
 # Override "block" cursor if you don't like how it looks in this fork
 # I prefer "underline"
 block_replace_shape = "underline"
