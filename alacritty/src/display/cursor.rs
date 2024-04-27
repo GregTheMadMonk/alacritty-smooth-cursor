@@ -52,11 +52,22 @@ pub struct CursorRects {
 }
 
 impl CursorRects {
-    pub fn interpolate(&mut self, other: &Self, factor: f32, spring: f32) {
+    pub fn interpolate(
+        &mut self,
+        other: &Self,
+        factor: f32,
+        spring: f32,
+        max_s_x: f32,
+        max_s_y: f32
+    ) {
         for (mine, theirs) in self.rects.iter_mut().zip(other.rects.iter()) {
             *mine = match &mine {
                 Some(mine_v) => match theirs {
-                    Some(theirs_v) => Some(mine_v.interpolate(theirs_v, factor, spring)),
+                    Some(theirs_v) => Some(
+                        mine_v.interpolate(
+                            theirs_v, factor, spring, max_s_x, max_s_y
+                        )
+                    ),
                     None => None
                 }
                 None => *theirs
