@@ -29,14 +29,13 @@ triggers a surface re-render every frame when the window is visible.
 
 #### Known issues
 
-* When I tried running this with Waylad, I got a lot of artifacts and it didn't
-  update as smooth in general. Running via XWayland (`env -u WAYLAND_DISPLAY alacritty`)
-  works though
+* This fork doesn't run well on Wayland (#3 if you want to tackle it). For now,
+  build the application without Wayland support to make it use XWayland:
+  `cargo run --features=x11 --no-default-features`.  I used to recommend
+  unsetting `WAYLAND_DISPLAY` here: __don't do it please__. This will make
+  __all__ applications you start from the terminal ignore your Wayland session.
 * Currently redraws are dumb and update the window every frame even if nothing
-  has changed. Expect a little GPU usage in idle.
-* "Spring" effect looks nice, but may be annoying when the cursor jumps around a
-  lot. TODO: Implement a restriction on how much the cursor size may change
-  during movement
+  has changed. Expect a little GPU usage in idle (progress in #2).
 * Block cursor may look really off due to blending hack that essentially just
   inverts the character color. It is recommended to replace it with "underline"
   (see config or GIF demo)
