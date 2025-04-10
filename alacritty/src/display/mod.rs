@@ -401,6 +401,7 @@ pub struct Display {
 
     // Old cursor
     cursor_rects: Option<CursorRects>,
+    last_frame_cursor_start: Instant,
 }
 
 impl Display {
@@ -544,6 +545,7 @@ impl Display {
             meter: Default::default(),
             ime: Default::default(),
             cursor_rects: None,
+            last_frame_cursor_start: Instant::now(),
         })
     }
 
@@ -902,12 +904,18 @@ impl Display {
         let new_cur_rects =
             cursor.rects(&size_info, config.cursor.thickness(), block_rep_shape);
         if config.cursor.smooth_motion {
+            let now     = Instant::now();
+            let delta   = now - self.last_frame_cursor_start;
+            // Don't count secs: we don't expect FPS < 1
+            let fps     = 1e9 / f64::from(delta.subsec_nanos());
+            self.last_frame_cursor_start = now;
             match self.cursor_rects {
                 None =>
                     self.cursor_rects = Some(new_cur_rects),
                 Some(ref mut crcts) =>
                     crcts.interpolate(
                         &new_cur_rects,
+                        fps as f32,
                         config.cursor.smooth_motion_factor,
                         config.cursor.smooth_motion_spring,
                         config.cursor.smooth_motion_max_stretch_x,
