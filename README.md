@@ -18,10 +18,8 @@ This branch contains the following patches:
 
 ### smooth-cursor
 
-This patch introduces basic cursor animations to Alacritty in a rather simple
-way.
-It replaces the block cursor render by a rectangle with a changed blend mode and
-triggers a surface re-render every frame when the window is visible.
+This fork introduces basic cursor animations to Alacritty in a rather simple way.
+It replaces the block cursor render by a rectangle with a changed blend mode.
 
 <p align="center">
     <img width="100%" alt="Alacritty smooth cursor demo" src="https://raw.githubusercontent.com/GregTheMadMonk/alacritty-smooth-cursor/refs/heads/patch/smooth-cursor/extra/demo.gif">
@@ -29,16 +27,15 @@ triggers a surface re-render every frame when the window is visible.
 
 #### Known issues
 
-* This fork doesn't run well on Wayland (#3 if you want to tackle it). For now,
-  build the application without Wayland support to make it use XWayland:
-  `cargo run --features=x11 --no-default-features`.  I used to recommend
-  unsetting `WAYLAND_DISPLAY` here: __don't do it please__. This will make
-  __all__ applications you start from the terminal ignore your Wayland session.
-* Currently redraws are dumb and update the window every frame even if nothing
-  has changed. Expect a little GPU usage in idle (progress in #2).
 * Block cursor may look really off due to blending hack that essentially just
   inverts the character color. It is recommended to replace it with "underline"
   (see config or GIF demo)
+* __Wayland compatibility is fixed!__ If you still experience issues, report
+  them to #3 and feel free to reopen it
+* Probably more resource consumption when redrawing the frame, but overall the
+  performance drawbacks should be __mostly mitigated__ by now
+* Animation speed depending on FPS is __fixed__, you might want to adjust
+  your config since, well, your FPS doesn't get factored in anymore :)
 
 #### Configure
 
