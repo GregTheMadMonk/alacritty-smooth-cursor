@@ -467,6 +467,10 @@ impl Window {
         );
     }
 
+    pub fn is_x11(&self) -> bool {
+        self.is_x11
+    }
+
     /// Disable macOS window shadows.
     ///
     /// This prevents rendering artifacts from showing up when the window is transparent.

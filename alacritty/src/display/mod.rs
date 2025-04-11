@@ -401,6 +401,8 @@ pub struct Display {
 
     // Old cursor
     cursor_rects: Option<CursorRects>,
+
+    pub cursor_moving: bool,
     last_frame_cursor_start: Instant,
 }
 
@@ -545,6 +547,7 @@ impl Display {
             meter: Default::default(),
             ime: Default::default(),
             cursor_rects: None,
+            cursor_moving: true,
             last_frame_cursor_start: Instant::now(),
         })
     }
@@ -811,8 +814,15 @@ impl Display {
         match terminal.damage() {
             TermDamage::Full => self.damage_tracker.frame().mark_fully_damaged(),
             TermDamage::Partial(damaged_lines) => {
-                for damage in damaged_lines {
-                    self.damage_tracker.frame().damage_line(damage);
+                if config.cursor.smooth_motion
+                   && self.cursor_moving
+                   && !self.window.is_x11() {
+                    // A cheap trick for wayland
+                    self.damage_tracker.frame().mark_fully_damaged()
+                } else {
+                    for damage in damaged_lines {
+                        self.damage_tracker.frame().damage_line(damage);
+                    }
                 }
             },
         }
@@ -904,16 +914,18 @@ impl Display {
         let new_cur_rects =
             cursor.rects(&size_info, config.cursor.thickness(), block_rep_shape);
         if config.cursor.smooth_motion {
-            let now     = Instant::now();
-            let delta   = now - self.last_frame_cursor_start;
+            let now   = Instant::now();
+            let delta = now - self.last_frame_cursor_start;
             // Don't count secs: we don't expect FPS < 1
-            let fps     = 1e9 / f64::from(delta.subsec_nanos());
+            let fps   = 1e9 / f64::from(delta.subsec_nanos());
             self.last_frame_cursor_start = now;
             match self.cursor_rects {
-                None =>
-                    self.cursor_rects = Some(new_cur_rects),
+                None => {
+                    self.cursor_moving = true;
+                    self.cursor_rects = Some(new_cur_rects);
+                },
                 Some(ref mut crcts) =>
-                    crcts.interpolate(
+                    self.cursor_moving = crcts.interpolate(
                         &new_cur_rects,
                         fps as f32,
                         config.cursor.smooth_motion_factor,
