@@ -60,7 +60,9 @@ impl CursorRects {
         spring: f32,
         max_s_x: f32,
         max_s_y: f32
-    ) {
+    ) -> bool {
+        let mut changed = false;
+
         let adjust = if fps_cur > 0.0 { 60.0 / fps_cur } else { 1.0 };
         let true_factor = (factor * adjust).min(1.0);
         for (mine, theirs) in self.rects.iter_mut().zip(other.rects.iter()) {
@@ -68,14 +70,23 @@ impl CursorRects {
                 Some(mine_v) => match theirs {
                     Some(theirs_v) => Some(
                         mine_v.interpolate(
-                            theirs_v, true_factor, spring, max_s_x, max_s_y
+                            theirs_v, true_factor, spring, max_s_x, max_s_y,
+                            &mut changed
                         )
                     ),
-                    None => None
+                    None => {
+                        changed = true;
+                        None
+                    }
                 }
-                None => *theirs
+                None => {
+                    changed |= !theirs.is_none();
+                    *theirs
+                }
             }
         }
+
+        changed
     }
 }
 
