@@ -41,7 +41,8 @@ impl RenderRect {
         factor: f32,
         spring: f32,
         max_s_x: f32,
-        max_s_y: f32
+        max_s_y: f32,
+        changed: &mut bool
     ) -> Self {
         let interp = |x: f32, y: f32, f: f32| x * (1.0 - f) + y * f;
 
@@ -52,6 +53,17 @@ impl RenderRect {
         let y1_fac = factor * if dy < 0.0 { 1.0 } else { spring };
         let x2_fac = factor * if dx > 0.0 { 1.0 } else { spring };
         let y2_fac = factor * if dy > 0.0 { 1.0 } else { spring };
+
+        if
+            self.x.round() == other.x.round()
+            && self.y.round() == other.y.round()
+            && self.width.round() == other.width.round()
+            && self.height.round() == other.height.round()
+        {
+            return *self;
+        }
+
+        *changed = true;
 
         let mut x1 = interp(self.x, other.x, x1_fac);
         let mut y1 = interp(self.y, other.y, y1_fac);

@@ -370,7 +370,7 @@ impl WindowContext {
             return;
         }
 
-        if !self.config.cursor.smooth_motion { self.dirty = false; }
+        self.dirty = false;
 
         // Force the display to process any pending display update.
         self.display.process_renderer_update();
@@ -395,6 +395,15 @@ impl WindowContext {
             &self.config,
             &mut self.search_state,
         );
+
+        // Request immediate re-draw if cursor animation hasn't finished
+        if self.config.cursor.smooth_motion && self.display.cursor_moving {
+            if self.display.window.has_frame {
+                self.display.window.request_redraw();
+            } else {
+                self.dirty = true;
+            }
+        }
     }
 
     /// Process events for this terminal window.
