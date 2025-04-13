@@ -13,6 +13,7 @@ use toml::{Table, Value};
 pub mod bell;
 pub mod color;
 pub mod cursor;
+pub mod seltools;
 pub mod debug;
 pub mod font;
 pub mod general;

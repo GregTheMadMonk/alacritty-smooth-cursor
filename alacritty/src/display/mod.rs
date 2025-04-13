@@ -18,6 +18,7 @@ use glutin::surface::{Surface, SwapInterval, WindowSurface};
 use log::{debug, info};
 use parking_lot::MutexGuard;
 use serde::{Deserialize, Serialize};
+use serde_json as json;
 use winit::dpi::PhysicalSize;
 use winit::keyboard::ModifiersState;
 use winit::raw_window_handle::RawWindowHandle;
@@ -79,6 +80,9 @@ const SHORTENER: char = '…';
 
 /// Color which is used to highlight damaged rects when debugging.
 const DAMAGE_RECT_COLOR: Rgb = Rgb::new(255, 0, 255);
+
+/// Seltools tabs
+const SELTOOLS_TABS: [&str; 2] = [ "JSON", "?" ];
 
 #[derive(Debug)]
 pub enum Error {
@@ -388,6 +392,7 @@ pub struct Display {
 
     // Mouse point position when highlighting hints.
     hint_mouse_point: Option<Point>,
+    pub mouse_point: Point,
 
     renderer: ManuallyDrop<Renderer>,
     renderer_preference: Option<RendererPreference>,
@@ -404,6 +409,20 @@ pub struct Display {
 
     pub cursor_moving: bool,
     last_frame_cursor_start: Instant,
+
+    // Seltools stuff
+    seltools_start: Point,
+    seltools_end:   Point,
+    seltools_tab:   usize,
+    pub seltools_click: Option<winit::event::MouseButton>,
+    // We store a copy of the string to monitor change
+    seltools_str:   String,
+    // Paths that are open in seltools
+    seltools_open:  std::collections::HashSet<String>,
+    // Scrolling the seltools
+    pub seltools_scroll: usize,
+    // Seltools might require the terminal to copy something to the clipboard
+    seltools_clip: Option<String>,
 }
 
 impl Display {
@@ -542,6 +561,7 @@ impl Display {
             vi_highlighted_hint: Default::default(),
             highlighted_hint: Default::default(),
             hint_mouse_point: Default::default(),
+            mouse_point: Default::default(),
             pending_update: Default::default(),
             cursor_hidden: Default::default(),
             meter: Default::default(),
@@ -549,6 +569,14 @@ impl Display {
             cursor_rects: None,
             cursor_moving: true,
             last_frame_cursor_start: Instant::now(),
+            seltools_start:  Point::new(0.into(), 0.into()),
+            seltools_end:    Point::new(0.into(), 0.into()),
+            seltools_tab:    0,
+            seltools_click:  None,
+            seltools_str:    "".to_owned(),
+            seltools_open:   Default::default(),
+            seltools_scroll: 0,
+            seltools_clip:   None,
         })
     }
 
@@ -828,6 +856,16 @@ impl Display {
         }
         terminal.reset_damage();
 
+        let text_selection = terminal.selection_to_string();
+        if config.seltools.enabled {
+            match &self.seltools_clip {
+                Some(clip) => {
+                    terminal.clipboard_store_str(b'c', clip);
+                    self.seltools_clip = None;
+                }, None => {},
+            }
+        }
+
         // Drop terminal as early as possible to free lock.
         drop(terminal);
 
@@ -944,6 +982,18 @@ impl Display {
             self.cursor_rects = Some(new_cur_rects);
         }
         rects.extend(self.cursor_rects.unwrap());
+
+        if config.seltools.enabled {
+            match text_selection {
+                Some(ts) => self.draw_seltools(config, ts),
+                None => {
+                    if !self.seltools_str.is_empty() {
+                        self.seltools_end = self.seltools_start;
+                        self.seltools_str = "".to_owned();
+                    }
+                }
+            }
+        }
 
         // Push visual bell after url/underline/strikeout rects.
         let visual_bell_intensity = self.visual_bell.intensity();
@@ -1426,6 +1476,375 @@ impl Display {
         }
     }
 
+    /// Draw a single json value
+    #[inline(never)]
+    fn draw_json_val(
+        clicked: &Option<winit::event::MouseButton>,
+        path: &String,
+        open: &mut std::collections::HashSet<String>,
+        mouse_point: Point,
+        val: &serde_json::Value,
+        off: usize,
+        y: &mut usize,
+        repeat: &mut bool,
+        clip: &mut Option<String>,
+        write: &impl Fn(usize, &String, bool) -> ()
+    ) {
+        if path != "/" && !open.contains(path) {
+            return;
+        }
+
+        let expand   = *clicked == Some(MouseButton::Left);
+        let copy_key = *clicked == Some(MouseButton::Middle);
+        let copy_val = *clicked == Some(MouseButton::Right);
+
+        use serde_json::Value::Null;
+        use serde_json::Value::Bool;
+        use serde_json::Value::Number;
+        use serde_json::Value::String;
+        use serde_json::Value::Array;
+        use serde_json::Value::Object;
+        use winit::event::MouseButton;
+
+        let val_str = |v: &serde_json::Value| match v {
+            Null      => "null".to_owned(),
+            Bool(x)   => x.to_string(),
+            Number(x) => x.to_string(),
+            String(x) => format!("\"{x}\""),
+            Array(a)  =>
+                if a.is_empty() { "[]".to_owned() }
+                else            { format!("[ {} items ]", a.len()) },
+            Object(o) =>
+                if o.is_empty() { "{}".to_owned() }
+                else            { format!("{{ {} keys }}", o.len()) },
+        };
+
+        let prefix = (0..off).map(|_| " ").collect::<std::string::String>();
+
+        match val {
+            Null => {
+                write(*y, &"null".to_owned(), false);
+                *y += 1;
+            },
+            Bool(x) => {
+                write(*y, &x.to_string(), false);
+                *y += 1;
+            },
+            Number(x) => {
+                write(*y, &x.to_string(), false);
+                *y += 1;
+            },
+            String(x) => {
+                write(*y, &format!("\"{x}\""), false);
+                *y += 1;
+            },
+            Array(v) => {
+                if v.is_empty() {
+                    write(*y, &format!("{}{}", prefix, "[ <empty> ]"), false);
+                    *y += 1;
+                }
+                for i in 0..v.len() {
+                    let hl   = mouse_point.line == *y;
+                    let repr = val_str(&v[i]);
+                    write(*y, &format!("{}[{}]: {}", prefix, i, repr), hl);
+                    *y += 1;
+                    let new_path = format!("{}{}/", path, i);
+                    if hl {
+                        if expand {
+                            *repeat = true;
+                            if open.contains(&new_path) {
+                                open.remove(&new_path);
+                            } else {
+                                open.insert(new_path.clone());
+                            }
+                        } else if copy_key {
+                            *clip = Some(i.to_string());
+                        } else if copy_val {
+                            *clip = Some(format!("{}", v[i]));
+                        }
+                    }
+                    if v[i].is_array() || v[i].is_object() {
+                        Self::draw_json_val(
+                            clicked,
+                            &new_path,
+                            open,
+                            mouse_point,
+                            &v[i],
+                            off + 2,
+                            y,
+                            repeat,
+                            clip,
+                            write
+                        );
+                    }
+                }
+            },
+            Object(o) => {
+                if o.is_empty() {
+                    write(*y, &format!("{}{}", prefix, "{ <empty> }"), false);
+                    *y += 1;
+                }
+                for (key, val) in o {
+                    let hl = mouse_point.line == *y;
+                    let repr = val_str(&val);
+                    write(*y, &format!("{}\"{}\": {}", prefix, key, repr), hl);
+                    *y += 1;
+                    let new_path = format!("{}{}/", path, key);
+                    if hl {
+                        if expand {
+                            *repeat = true;
+                            if open.contains(&new_path) {
+                                open.remove(&new_path);
+                            } else {
+                                open.insert(new_path.clone());
+                            }
+                        } else if copy_key {
+                            *clip = Some(key.clone());
+                        } else if copy_val {
+                            *clip = Some(format!("{}", val));
+                        }
+                    }
+                    if val.is_array() || val.is_object() {
+                        Self::draw_json_val(
+                            clicked,
+                            &new_path,
+                            open,
+                            mouse_point,
+                            &val,
+                            off + 2,
+                            y,
+                            repeat,
+                            clip,
+                            write
+                        );
+                    }
+                }
+            },
+        };
+    }
+
+    /// Draw seltools
+    #[inline(never)]
+    fn draw_seltools(&mut self, config: &UiConfig, sel_orig: String) {
+        let sel = str::replace(&sel_orig, "\n", "");
+
+        let mut repeat = false;
+
+        let colors = &config.colors;
+        let fg    = colors.normal.black;
+        let bg    = colors.normal.cyan;
+        let bg_hl = colors.bright.cyan;
+        let glyph_cache = std::cell::RefCell::new(&mut self.glyph_cache);
+
+        const VLINE: &str = "│";
+        const VBAR: &str  = "▓";
+
+        let width = config.seltools.hint_width;
+
+        let screen_lines = self.size_info.screen_lines();
+
+        let x: usize = self.size_info.columns().saturating_sub(width);
+        let y: usize = 0;
+        let mut y_max;
+        self.seltools_start = Point::new(y.into(), x.into());
+
+        let blank = (0..(width-1)).map(|_| " ").collect::<String>();
+        let bottom = "└".to_owned()
+                   + &(0..(width-1)).map(|_| "─").collect::<String>();
+
+        if self.seltools_str != sel {
+            self.seltools_open   = Default::default();
+            self.seltools_str    = sel.clone();
+            self.seltools_scroll = 0;
+        }
+
+        if self.seltools_end.line <= screen_lines {
+            self.seltools_scroll = 0;
+        }
+
+        while self.seltools_end.line > screen_lines
+              && self.seltools_end.line - self.seltools_scroll < screen_lines
+        {
+            self.seltools_scroll = self.seltools_scroll.saturating_sub(1);
+        }
+
+        // Prepare for progress bar
+        let start_bar = 1 + if self.seltools_end.line == 0 {
+            repeat = true;
+            0
+        } else {
+            (
+                ( // Do we really have to be this verbose?
+                    self.seltools_scroll as f32
+                    / self.seltools_end.line.unwrap() as f32
+                ) * (screen_lines - 2) as f32
+            ) as usize
+        };
+        let end_bar = 1 + start_bar + if self.seltools_end.line == 0 {
+            0
+        } else {
+            (
+                ((screen_lines - 2) * (screen_lines - 2)) as f32
+                / self.seltools_end.line.unwrap() as f32
+            ) as usize
+        };
+
+        let rnd = std::cell::RefCell::new(&mut self.renderer);
+
+        let scroll = self.seltools_scroll.clone();
+        let write = |line: usize, what: &String, hl: bool| {
+            let my_y = y + line - scroll;
+            if my_y < 1 {
+                return;
+            }
+
+            rnd.borrow_mut().draw_string(
+                Point::new(my_y, (x + 1).into()),
+                fg, if hl { bg_hl } else { bg },
+                (
+                    if what.len() >= width {
+                        what.chars().into_iter().take(width - 4).collect::<String>() + "..."
+                    } else {
+                        what.clone()
+                    }
+                ).chars(),
+                &self.size_info, &mut glyph_cache.borrow_mut()
+            );
+            rnd.borrow_mut().draw_string(
+                Point::new(my_y, x.into()),
+                fg, bg,
+                if my_y >= start_bar && my_y < end_bar { VBAR } else { VLINE }.chars(),
+                &self.size_info,
+                &mut glyph_cache.borrow_mut()
+            );
+        };
+
+        {
+            let mut x1 = x;
+            rnd.borrow_mut().draw_string(
+                Point::new(y, x1.into()),
+                fg, bg,
+                VLINE.chars(),
+                &self.size_info,
+                &mut glyph_cache.borrow_mut()
+            );
+            x1 += 1;
+            rnd.borrow_mut().draw_string(
+                Point::new(y, x1.into()),
+                fg, bg,
+                blank.chars(),
+                &self.size_info,
+                &mut glyph_cache.borrow_mut()
+            );
+            for i in 0..SELTOOLS_TABS.len() {
+                let disabled = match i {
+                    0         => !config.seltools.parse_json,
+                    1_usize.. => false,
+                };
+                if disabled {
+                    if self.seltools_tab == i {
+                        self.seltools_tab += 1;
+                    }
+                    continue;
+                }
+
+                if self.seltools_click == Some(winit::event::MouseButton::Left)
+                   && self.mouse_point.line == y {
+                    if self.mouse_point.column >= x1
+                       && self.mouse_point.column < x1 + SELTOOLS_TABS[i].len() {
+                        repeat = true;
+                        self.seltools_tab = i;
+                        self.seltools_scroll = 0;
+                    }
+                }
+                rnd.borrow_mut().draw_string_flg(
+                    Point::new(y, x1.into()),
+                    fg, bg,
+                    if i == self.seltools_tab { Flags::BOLD } else { Flags::empty() },
+                    SELTOOLS_TABS[i].chars(),
+                    &self.size_info,
+                    &mut glyph_cache.borrow_mut()
+                );
+                x1 += SELTOOLS_TABS[i].len();
+                rnd.borrow_mut().draw_string(
+                    Point::new(y, x1.into()),
+                    fg, bg,
+                    "╵".chars(),
+                    &self.size_info,
+                    &mut glyph_cache.borrow_mut()
+                );
+                x1 += 1;
+            }
+        }
+        y_max = 1;
+
+        match self.seltools_tab {
+            0 => {
+                match json::from_str::<json::Value>(&sel) {
+                    Ok(p_json) => {
+                        Self::draw_json_val(
+                            &if self.mouse_point.line + self.seltools_scroll != screen_lines - 1 {
+                                self.seltools_click
+                            } else {
+                                None
+                            },
+                            &"/".to_owned(),
+                            &mut self.seltools_open,
+                            Point::new(
+                                self.mouse_point.line + self.seltools_scroll,
+                                self.mouse_point.column
+                            ),
+                            &p_json, 0, &mut y_max, &mut repeat, &mut self.seltools_clip,
+                            &|y: usize, s: &std::string::String, hl: bool| {
+                                write(y, &blank, hl);
+                                write(y, s, hl);
+                            }
+                        );
+                    },
+                    Err(_) => {
+                        write(y_max, &blank, false);
+                        write(y_max, &"Not a valid JSON".to_owned(), false);
+                        y_max += 1;
+                    },
+                }
+            },
+            1 => {
+                write(y_max, &blank, false);
+                write(y_max, &"LMB = expand".to_string(), false);
+                y_max += 1;
+                write(y_max, &blank, false);
+                write(y_max, &"RMB = copy value".to_string(), false);
+                y_max += 1;
+                write(y_max, &blank, false);
+                write(y_max, &"MMB = copy key".to_string(), false);
+                y_max += 1;
+            },
+            2_usize.. => {},
+        }
+
+        rnd.borrow_mut().draw_string(
+            Point::new((y_max - self.seltools_scroll).min(screen_lines - 1), x.into()),
+            fg, bg,
+            bottom.chars(),
+            &self.size_info,
+            &mut glyph_cache.borrow_mut()
+        );
+        y_max += 1;
+
+        self.seltools_end = Point::new(
+            y_max.into(),
+            self.size_info.columns().into()
+        );
+
+        if self.seltools_click.is_some() {
+            self.seltools_click = None;
+        }
+
+        if repeat {
+            self.draw_seltools(config, sel_orig);
+        }
+    }
+
     /// Highlight damaged rects.
     ///
     /// This function is for debug purposes only.
@@ -1506,6 +1925,9 @@ impl Display {
 
         scheduler.schedule(event, swap_timeout, false, timer_id);
     }
+
+    pub fn seltools_start(&self) -> Point { self.seltools_start }
+    pub fn seltools_end(&self) -> Point   { self.seltools_end   }
 }
 
 impl Drop for Display {
