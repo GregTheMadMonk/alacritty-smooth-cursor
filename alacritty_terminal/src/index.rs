@@ -162,6 +162,8 @@ impl Line {
             },
         }
     }
+
+    pub fn unwrap(&self) -> i32 { self.0 }
 }
 
 impl fmt::Display for Line {

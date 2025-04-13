@@ -2271,6 +2271,14 @@ impl<T: EventListener> Handler for Term<T> {
     }
 }
 
+impl<T: EventListener> Term<T> {
+    /// Store string into clipboard
+    #[inline]
+    pub fn clipboard_store_str(&mut self, clipboard: u8, str: &String) {
+        self.clipboard_store(clipboard, Base64.encode(str).as_bytes());
+    }
+}
+
 /// The state of the [`Mode`] and [`PrivateMode`].
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
