@@ -229,6 +229,45 @@ impl Renderer {
         self.draw_cells(size_info, glyph_cache, cells);
     }
 
+    /// Draw a string in a variable location. Supports flags. Used in seltools
+    pub fn draw_string_flg(
+        &mut self,
+        point: Point<usize>,
+        fg: Rgb,
+        bg: Rgb,
+        a_flags: Flags,
+        string_chars: impl Iterator<Item = char>,
+        size_info: &SizeInfo,
+        glyph_cache: &mut GlyphCache,
+    ) {
+        let mut wide_char_spacer = false;
+        let cells = string_chars.enumerate().filter_map(|(i, character)| {
+            let flags = if wide_char_spacer {
+                wide_char_spacer = false;
+                return None;
+            } else if character.width() == Some(2) {
+                // The spacer is always following the wide char.
+                wide_char_spacer = true;
+                Flags::WIDE_CHAR
+            } else {
+                Flags::empty()
+            };
+
+            Some(RenderableCell {
+                point: Point::new(point.line, point.column + i),
+                character,
+                extra: None,
+                flags: a_flags | flags,
+                bg_alpha: 1.0,
+                fg,
+                bg,
+                underline: fg,
+            })
+        });
+
+        self.draw_cells(size_info, glyph_cache, cells);
+    }
+
     pub fn with_loader<F, T>(&mut self, func: F) -> T
     where
         F: FnOnce(LoaderApi<'_>) -> T,

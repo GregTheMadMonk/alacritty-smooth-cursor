@@ -484,6 +484,15 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
             return;
         }
 
+        if self.in_seltools(&Some(point)) {
+            self.ctx.display().mouse_point = Point::new(
+                point.line + self.ctx.terminal().grid().display_offset(),
+                point.column
+            );
+            self.ctx.display().window.request_redraw();
+            return;
+        }
+
         self.ctx.mouse_mut().inside_text_area = inside_text_area;
         self.ctx.mouse_mut().cell_side = cell_side;
 
@@ -650,6 +659,12 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
             let display_offset = self.ctx.terminal().grid().display_offset();
             let point = self.ctx.mouse().point(&self.ctx.size_info(), display_offset);
 
+            if self.in_seltools(&Some(point)) {
+                self.ctx.display().seltools_click = Some(button);
+                self.ctx.display().window.request_redraw();
+                return;
+            }
+
             if let MouseButton::Left = button {
                 self.on_left_click(point)
             }
@@ -726,13 +741,25 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
         let multiplier = self.ctx.config().scrolling.multiplier;
         match delta {
             MouseScrollDelta::LineDelta(columns, lines) => {
-                let new_scroll_px_x = columns * self.ctx.size_info().cell_width();
-                let new_scroll_px_y = lines * self.ctx.size_info().cell_height();
-                self.scroll_terminal(
-                    new_scroll_px_x as f64,
-                    new_scroll_px_y as f64,
-                    multiplier as f64,
-                );
+                let si     = self.ctx.display().size_info;
+                let offset = self.ctx.terminal().grid().display_offset();
+                let point  = self.ctx.mouse().point(&si, offset);
+                if self.in_seltools(&Some(point)) {
+                    self.ctx.display().seltools_scroll = if lines.is_sign_negative() {
+                        self.ctx.display().seltools_scroll.saturating_add(lines.abs() as usize)
+                    } else {
+                        self.ctx.display().seltools_scroll.saturating_sub(lines as usize)
+                    };
+                    self.ctx.display().window.request_redraw();
+                } else {
+                    let new_scroll_px_x = columns * self.ctx.size_info().cell_width();
+                    let new_scroll_px_y = lines * self.ctx.size_info().cell_height();
+                    self.scroll_terminal(
+                        new_scroll_px_x as f64,
+                        new_scroll_px_y as f64,
+                        multiplier as f64,
+                    );
+                }
             },
             MouseScrollDelta::PixelDelta(mut lpos) => {
                 match phase {
@@ -762,6 +789,13 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
         const MOUSE_WHEEL_DOWN: u8 = 65;
         const MOUSE_WHEEL_LEFT: u8 = 66;
         const MOUSE_WHEEL_RIGHT: u8 = 67;
+
+        let si     = self.ctx.display().size_info;
+        let offset = self.ctx.terminal().grid().display_offset();
+        let point  = self.ctx.mouse().point(&si, offset);
+        if self.in_seltools(&Some(point)) {
+            return;
+        }
 
         let width = f64::from(self.ctx.size_info().cell_width());
         let height = f64::from(self.ctx.size_info().cell_height());
@@ -966,6 +1000,30 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
         }
     }
 
+    /// Check if the point is in seltools
+    fn in_seltools(&mut self, point_o: &Option<Point>) -> bool {
+        if !self.ctx.config().seltools.enabled {
+            return false;
+        }
+
+        let point = point_o.unwrap_or(
+            {
+                let si     = self.ctx.display().size_info;
+                let offset = self.ctx.terminal().grid().display_offset();
+                self.ctx.mouse().point(&si, offset)
+            }
+        );
+
+        let display_offset = self.ctx.terminal().grid().display_offset() as i32;
+
+        let start = self.ctx.display().seltools_start();
+        let end   = self.ctx.display().seltools_end();
+        return start.column <= point.column
+            && end.column   >  point.column
+            && start.line   <= point.line + display_offset
+            && end.line     >  point.line + display_offset;
+    }
+
     /// Reset mouse cursor based on modifier and terminal state.
     #[inline]
     pub fn reset_mouse_cursor(&mut self) {
@@ -1037,6 +1095,10 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
     /// The provided mode, mods, and key must match what is allowed by a binding
     /// for its action to be executed.
     fn process_mouse_bindings(&mut self, event: MouseEvent) -> bool {
+        if self.in_seltools(&None) {
+            return false;
+        }
+
         let mode = BindingMode::new(self.ctx.terminal().mode(), self.ctx.search_active());
         let mouse_mode = self.ctx.mouse_mode();
         let mods = self.ctx.modifiers().state();
