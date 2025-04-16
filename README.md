@@ -72,6 +72,8 @@ clipboard.
 * Only JSON is supported for now
 * Scrollbar doesn't work
 * It is possible to have nesting so deep that the values will be off-screen
+* I didn't consider performance much, it should have no impact in idle, but
+  when navigating the tree resource consumption may rise
 
 #### Configure
 
