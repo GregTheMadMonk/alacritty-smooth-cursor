@@ -55,6 +55,36 @@ smooth_motion_max_stretch_y = 3.0
 # Override "block" cursor if you don't like how it looks in this fork
 # block_replace_shape = "underline"
 ```
+
+### seltools
+
+A basic text-based UI that is rendered by the terminal and is able to parse
+the current selection if it is a JSON value.
+Allows to browse said JSON interactively, and copy keys/values to the system
+clipboard.
+
+<p align="center">
+    <img width="100%" alt="Alacritty seltools demo" src="https://raw.githubusercontent.com/GregTheMadMonk/alacritty-smooth-cursor/refs/heads/patch/seltools/extra/demo_seltools.gif">
+</p>
+
+#### Known issues
+
+* Only JSON is supported for now
+* Scrollbar doesn't work
+* It is possible to have nesting so deep that the values will be off-screen
+
+#### Configure
+
+```toml
+[seltools]
+# `false` by default, naturally
+enabled = true
+# `true` by default, enables JSON parsing (the only thing seltools can do for now)
+parse_json = true
+# Text-based UI width
+hint_width = 40
+```
+
 _Back to the original README..._
 
 <hr>
