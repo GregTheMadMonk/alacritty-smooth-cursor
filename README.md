@@ -1,8 +1,24 @@
 <p align="center">
-    <img width="200" alt="Alacritty Logo" src="https://raw.githubusercontent.com/alacritty/alacritty/master/extra/logo/compat/alacritty-term%2Bscanlines.png">
+    <img width="200" alt="Alacritty Logo" src="https://raw.githubusercontent.com/gregthemadmonk/alacritty/master/extra/logo/compat/alacritty-term%2Bscanlines.png">
 </p>
 
 <h1 align="center">Alacritty - A fast, cross-platform, OpenGL terminal emulator</h1>
+
+## About this fork!
+
+This fork originally introduced only the smooth cursor motion, but now also
+offers a second patch (**seltools**).
+If you are only interested in one thing, all patches are independent and could
+be built individually from __patch/...__ branches.
+
+Package in AUR (contains all available patches):
+https://aur.archlinux.org/packages/alacritty-smooth-cursor-git .
+
+This branch contains the following patches:
+
+_Back to the original README..._
+
+<hr>
 
 <p align="center">
   <img alt="Alacritty - A fast, cross-platform, OpenGL terminal emulator"
