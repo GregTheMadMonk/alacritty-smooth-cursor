@@ -935,11 +935,15 @@ impl Display {
 
         if config.seltools.enabled {
             match text_selection {
-                Some(ts) => self.draw_seltools(config, ts),
+                Some(ts) => {
+                    self.draw_seltools(config, ts);
+                    self.damage_tracker.frame().mark_fully_damaged();
+                },
                 None => {
                     if !self.seltools_str.is_empty() {
                         self.seltools_end = self.seltools_start;
                         self.seltools_str = "".to_owned();
+                        self.damage_tracker.frame().mark_fully_damaged();
                     }
                 }
             }
@@ -1626,7 +1630,7 @@ impl Display {
             (
                 ( // Do we really have to be this verbose?
                     self.seltools_scroll as f32
-                    / self.seltools_end.line.unwrap() as f32
+                    / self.seltools_end.line.0 as f32
                 ) * (screen_lines - 2) as f32
             ) as usize
         };
@@ -1635,7 +1639,7 @@ impl Display {
         } else {
             (
                 ((screen_lines - 2) * (screen_lines - 2)) as f32
-                / self.seltools_end.line.unwrap() as f32
+                / self.seltools_end.line.0 as f32
             ) as usize
         };
 
