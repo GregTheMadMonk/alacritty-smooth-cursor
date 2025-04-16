@@ -1061,6 +1061,23 @@ relied upon.
 
 	Default: _false_
 
+# SELTOOLS
+
+Options introduced by seltools patch
+
+*enabled* = _true_ | _false_
+
+	Enables/disables seltools altogether
+
+*parse_json* = _true_ | _false_
+
+	Enables/disables the JSON parser in seltools. For now, seltools only have
+	a JSON parser, so disabling this option will render seltools useless
+
+*hint_width* = _<int>_
+
+	Width (in columns) of the seltools UI
+
 # SEE ALSO
 
 *alacritty*(1), *alacritty-msg*(1), *alacritty-bindings*(5)
