@@ -18,6 +18,8 @@ flat in color_t color;
 
 uniform float_t cellWidth;
 uniform float_t cellHeight;
+uniform float_t screenWidth;
+uniform float_t screenHeight;
 uniform float_t paddingY;
 uniform float_t paddingX;
 
@@ -25,6 +27,9 @@ uniform float_t underlinePosition;
 uniform float_t underlineThickness;
 
 uniform float_t undercurlPosition;
+
+uniform sampler2D background;
+uniform vec3 bgColor;
 
 #define PI 3.1415926538
 
@@ -132,7 +137,30 @@ void main() {
   }
 #elif defined(DRAW_DASHED)
   FRAG_COLOR = draw_dashed(x);
+#elif defined(DRAW_INVERTING)
+  vec2 coord = vec2(gl_FragCoord.x / screenWidth, gl_FragCoord.y / screenHeight);
+  vec4 colr = texture(background, coord);
+  float_t factor = length(bgColor / 255.0f - colr.rgb);
+  // If colr is too close to cursor color, either brighten it or dim it to be
+  // distinct enough
+  vec3 col  = colr.rgb;
+  vec3 diff = (col - color.rgb);
+  // Colors must be separated by 0.5 on the "value" scale
+  float_t V_our = max(color.r, max(color.g, color.b));
+  float_t V_tgt = max(col.r, max(col.g, col.b));
+  if (V_our > 0.5f) {
+      // Bring V_tgt to V_our - 0.5f
+      col *= (V_our - 0.5f) / V_tgt;
+  } else {
+      // Bring V_tgt to V_our + 0.5f
+      col *= (V_our + 0.5f) / V_tgt;
+  }
+  // Final cursor color
+  vec3 curc = vec3(color.rgb * (1.0f - factor) + col * factor);
+  // Blend with opacity
+  FRAG_COLOR = vec4(colr.rgb * (1.0f - color.a) + curc * color.a, 1.0f);
 #else
-  FRAG_COLOR = color;
+  vec2 coord = vec2(gl_FragCoord.x / screenWidth, gl_FragCoord.y / screenHeight);
+  FRAG_COLOR = texture(background, coord) * (1 - color.a) + color * color.a;
 #endif
 }
