@@ -98,7 +98,8 @@ impl RenderRect {
 
         RenderRect {
             x: x1, y: y1, width: x2 - x1, height: y2 - y1,
-            color: other.color, alpha: other.alpha,
+            color: other.color,
+            alpha: interp(self.alpha, other.alpha, factor / 3.0),
             kind: other.kind
         }
     }
@@ -304,16 +305,16 @@ const RECT_SHADER_V: &str = include_str!("../../res/rect.v.glsl");
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-struct Vertex {
+pub struct Vertex {
     // Normalized screen coordinates.
-    x: f32,
-    y: f32,
+    pub x: f32,
+    pub y: f32,
 
     // Color.
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
 }
 
 #[derive(Debug)]
@@ -390,7 +391,11 @@ impl RectRenderer {
         Ok(Self { vao, vbo, programs, vertices: Default::default() })
     }
 
-    pub fn draw(&mut self, size_info: &SizeInfo, metrics: &Metrics, rects: Vec<RenderRect>) {
+    pub fn normal_program(&self) -> GLuint {
+        return self.programs[RectKind::Normal as usize].id()
+    }
+
+    pub fn draw(&mut self, size_info: &SizeInfo, metrics: &Metrics, rects: Vec<RenderRect>, fbtex: GLuint, clear_color: Rgb) {
         unsafe {
             // Bind VAO to enable vertex attribute slots.
             gl::BindVertexArray(self.vao);
@@ -412,20 +417,22 @@ impl RectRenderer {
             // We iterate in reverse order to draw plain rects at the end, since we want visual
             // bell or damage rects be above the lines.
             for rect_kind in (RectKind::Inverting as u8..RectKind::NumKinds as u8).rev() {
+                let program = &self.programs[rect_kind as usize];
+                gl::UseProgram(program.id());
+                program.update_uniforms(size_info, metrics, clear_color);
+
                 let vertices = &mut self.vertices[rect_kind as usize];
                 if vertices.is_empty() {
                     continue;
                 }
 
-                let program = &self.programs[rect_kind as usize];
-                gl::UseProgram(program.id());
-                program.update_uniforms(size_info, metrics);
-
+                let mut cur_tex: GLint = 0;
                 if rect_kind == RectKind::Inverting as u8 {
-                    gl::BlendFunc(gl::ONE_MINUS_DST_COLOR, gl::ONE_MINUS_SRC_ALPHA);
-                } else {
-                    gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+                    gl::GetIntegerv(gl::TEXTURE_BINDING_2D, &mut cur_tex);
+                    gl::BindTexture(gl::TEXTURE_2D, fbtex);
                 }
+
+                gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
 
                 // Upload accumulated undercurl vertices.
                 gl::BufferData(
@@ -437,6 +444,10 @@ impl RectRenderer {
 
                 // Draw all vertices as list of triangles.
                 gl::DrawArrays(gl::TRIANGLES, 0, vertices.len() as i32);
+
+                if rect_kind == RectKind::Inverting as u8 {
+                    gl::BindTexture(gl::TEXTURE_2D, cur_tex as GLuint);
+                }
             }
 
             // Disable program.
@@ -497,6 +508,12 @@ pub struct RectShaderProgram {
     /// Cell height.
     u_cell_height: Option<GLint>,
 
+    /// Screen width
+    u_screen_width: Option<GLint>,
+
+    /// Screen height
+    u_screen_height: Option<GLint>,
+
     /// Terminal padding.
     u_padding_x: Option<GLint>,
 
@@ -511,6 +528,12 @@ pub struct RectShaderProgram {
 
     /// Undercurl position.
     u_undercurl_position: Option<GLint>,
+
+    /// Texture
+    u_tex: Option<GLint>,
+
+    /// Program bacjground color
+    u_bg_col: Option<GLint>,
 }
 
 impl RectShaderProgram {
@@ -520,6 +543,7 @@ impl RectShaderProgram {
             RectKind::Undercurl => Some("#define DRAW_UNDERCURL\n"),
             RectKind::DottedUnderline => Some("#define DRAW_DOTTED\n"),
             RectKind::DashedUnderline => Some("#define DRAW_DASHED\n"),
+            RectKind::Inverting => Some("#define DRAW_INVERTING\n"),
             _ => None,
         };
         let program = ShaderProgram::new(shader_version, header, RECT_SHADER_V, RECT_SHADER_F)?;
@@ -527,11 +551,15 @@ impl RectShaderProgram {
         Ok(Self {
             u_cell_width: program.get_uniform_location(c"cellWidth").ok(),
             u_cell_height: program.get_uniform_location(c"cellHeight").ok(),
+            u_screen_width: program.get_uniform_location(c"screenWidth").ok(),
+            u_screen_height: program.get_uniform_location(c"screenHeight").ok(),
             u_padding_x: program.get_uniform_location(c"paddingX").ok(),
             u_padding_y: program.get_uniform_location(c"paddingY").ok(),
             u_underline_position: program.get_uniform_location(c"underlinePosition").ok(),
             u_underline_thickness: program.get_uniform_location(c"underlineThickness").ok(),
             u_undercurl_position: program.get_uniform_location(c"undercurlPosition").ok(),
+            u_tex: program.get_uniform_location(c"background").ok(),
+            u_bg_col: program.get_uniform_location(c"bgColor").ok(),
             program,
         })
     }
@@ -540,7 +568,7 @@ impl RectShaderProgram {
         self.program.id()
     }
 
-    pub fn update_uniforms(&self, size_info: &SizeInfo, metrics: &Metrics) {
+    pub fn update_uniforms(&self, size_info: &SizeInfo, metrics: &Metrics, clear_color: Rgb) {
         let position = (0.5 * metrics.descent).abs();
         let underline_position = metrics.descent.abs() - metrics.underline_position.abs();
 
@@ -554,6 +582,12 @@ impl RectShaderProgram {
             }
             if let Some(u_cell_height) = self.u_cell_height {
                 gl::Uniform1f(u_cell_height, size_info.cell_height());
+            }
+            if let Some(u_screen_width) = self.u_screen_width {
+                gl::Uniform1f(u_screen_width, size_info.width());
+            }
+            if let Some(u_screen_height) = self.u_screen_height {
+                gl::Uniform1f(u_screen_height, size_info.height());
             }
             if let Some(u_padding_y) = self.u_padding_y {
                 gl::Uniform1f(u_padding_y, padding_y);
@@ -569,6 +603,12 @@ impl RectShaderProgram {
             }
             if let Some(u_undercurl_position) = self.u_undercurl_position {
                 gl::Uniform1f(u_undercurl_position, position);
+            }
+            if let Some(u_tex) = self.u_tex {
+                gl::Uniform1i(u_tex, 0);
+            }
+            if let Some(u_bg_col) = self.u_bg_col {
+                gl::Uniform3f(u_bg_col, clear_color.r as f32, clear_color.g as f32, clear_color.b as f32);
             }
         }
     }

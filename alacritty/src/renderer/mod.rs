@@ -25,11 +25,13 @@ use crate::renderer::shader::ShaderError;
 
 pub mod platform;
 pub mod rects;
+pub mod framebuffer;
 mod shader;
 mod text;
 
 pub use text::{GlyphCache, LoaderApi};
 
+use framebuffer::FramebufferRenderer;
 use shader::ShaderVersion;
 use text::{Gles2Renderer, Glsl3Renderer, TextRenderer};
 
@@ -89,6 +91,7 @@ enum TextRendererProvider {
 pub struct Renderer {
     text_renderer: TextRendererProvider,
     rect_renderer: RectRenderer,
+    fb_renderer:   FramebufferRenderer,
     robustness: bool,
 }
 
@@ -171,7 +174,9 @@ impl Renderer {
             }
         }
 
-        Ok(Self { text_renderer, rect_renderer, robustness })
+        let fb_renderer = FramebufferRenderer::new();
+
+        Ok(Self { text_renderer, rect_renderer, robustness, fb_renderer })
     }
 
     pub fn draw_cells<I: Iterator<Item = RenderableCell>>(
@@ -240,7 +245,7 @@ impl Renderer {
     }
 
     /// Draw all rectangles simultaneously to prevent excessive program swaps.
-    pub fn draw_rects(&mut self, size_info: &SizeInfo, metrics: &Metrics, rects: Vec<RenderRect>) {
+    pub fn draw_rects(&mut self, size_info: &SizeInfo, metrics: &Metrics, rects: Vec<RenderRect>, clear_color: Rgb) {
         if rects.is_empty() {
             return;
         }
@@ -252,7 +257,7 @@ impl Renderer {
             gl::BlendFuncSeparate(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA, gl::SRC_ALPHA, gl::ONE);
         }
 
-        self.rect_renderer.draw(size_info, metrics, rects);
+        self.rect_renderer.draw(size_info, metrics, rects, self.fb_renderer.get_tex(), clear_color);
 
         // Activate regular state again.
         unsafe {
@@ -328,7 +333,7 @@ impl Renderer {
 
     /// Set the viewport for cell rendering.
     #[inline]
-    pub fn set_viewport(&self, size: &SizeInfo) {
+    pub fn set_viewport(&mut self, size: &SizeInfo) {
         unsafe {
             gl::Viewport(
                 size.padding_x() as i32,
@@ -337,16 +342,27 @@ impl Renderer {
                 size.height() as i32 - 2 * size.padding_y() as i32,
             );
         }
+        self.fb_renderer.resize(
+            size.width() as i32,
+            size.height() as i32
+        );
     }
 
     /// Resize the renderer.
-    pub fn resize(&self, size_info: &SizeInfo) {
+    pub fn resize(&mut self, size_info: &SizeInfo) {
         self.set_viewport(size_info);
         match &self.text_renderer {
             TextRendererProvider::Gles2(renderer) => renderer.resize(size_info),
             TextRendererProvider::Glsl3(renderer) => renderer.resize(size_info),
         }
     }
+
+    /// Start drawing to a framebuffer
+    pub fn start_fb(&self) { self.fb_renderer.enable(); }
+    /// Draw the framebuffer quad
+    pub fn draw_fb(&self)  { self.fb_renderer.draw(self.rect_renderer.normal_program()); }
+    /// End drawing to a framebuffer
+    pub fn end_fb(&self)   { self.fb_renderer.disable(); }
 }
 
 struct GlExtensions;
