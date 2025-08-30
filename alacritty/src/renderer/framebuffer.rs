@@ -143,10 +143,17 @@ impl FramebufferRenderer {
 
     /// Draw the stored texture
     pub fn draw(&self, prog: GLuint) {
-        let mut cur_tex: GLint = 0;
+        let mut cur_tex:       GLint = 0;
+        let mut cur_prog:      GLint = 0;
+        let mut cur_blend_src: GLint = 0;
+        let mut cur_blend_dst: GLint = 0;
         unsafe {
-            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl::GetIntegerv(gl::TEXTURE_BINDING_2D, &mut cur_tex);
+            gl::GetIntegerv(gl::CURRENT_PROGRAM, &mut cur_prog);
+            gl::GetIntegerv(gl::BLEND_SRC_ALPHA, &mut cur_blend_src);
+            gl::GetIntegerv(gl::BLEND_DST_ALPHA, &mut cur_blend_dst);
+
+            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
 
             gl::BindVertexArray(self.vao);
             gl::BindBuffer(gl::ARRAY_BUFFER, self.vbo);
@@ -166,10 +173,11 @@ impl FramebufferRenderer {
 
             gl::BindTexture(gl::TEXTURE_2D, cur_tex as GLuint);
 
-            gl::UseProgram(0);
+            gl::UseProgram(cur_prog as GLuint);
 
             gl::BindBuffer(gl::ARRAY_BUFFER, 0);
             gl::BindVertexArray(0);
+            gl::BlendFunc(cur_blend_src as GLuint, cur_blend_dst as GLuint);
         }
     } // <-- FramebufferRenderer::draw(self)
 
