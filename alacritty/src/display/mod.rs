@@ -853,6 +853,9 @@ impl Display {
         self.make_current();
 
         self.renderer.clear(background_color, config.window_opacity());
+
+        self.renderer.start_fb();
+
         let mut lines = RenderLines::new();
 
         // Optimize loop hint comparator.
@@ -908,6 +911,9 @@ impl Display {
             // Show current display offset in vi-less search to indicate match position.
             self.draw_line_indicator(config, total_lines, None, display_offset);
         };
+
+        self.renderer.end_fb();
+        self.renderer.draw_fb();
 
         // Draw cursor.
         let block_rep_shape = config.cursor.block_replace_shape().map(|x| x.shape);
@@ -1031,7 +1037,7 @@ impl Display {
             self.damage_tracker.frame().add_viewport_rect(&size_info, x, y as i32, width, height);
 
             // Draw rectangles.
-            self.renderer.draw_rects(&size_info, &metrics, rects);
+            self.renderer.draw_rects(&size_info, &metrics, rects, background_color);
 
             // Relay messages to the user.
             let glyph_cache = &mut self.glyph_cache;
@@ -1049,7 +1055,7 @@ impl Display {
             }
         } else {
             // Draw rectangles.
-            self.renderer.draw_rects(&size_info, &metrics, rects);
+            self.renderer.draw_rects(&size_info, &metrics, rects, background_color);
         }
 
         self.draw_render_timer(config);
@@ -1068,7 +1074,7 @@ impl Display {
             let damage = self.damage_tracker.shape_frame_damage(self.size_info.into());
             let mut rects = Vec::with_capacity(damage.len());
             self.highlight_damage(&mut rects);
-            self.renderer.draw_rects(&self.size_info, &metrics, rects);
+            self.renderer.draw_rects(&self.size_info, &metrics, rects, background_color);
         }
 
         // Clearing debug highlights from the previous frame requires full redraw.

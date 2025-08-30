@@ -27,9 +27,9 @@ It replaces the block cursor render by a rectangle with a changed blend mode.
 
 #### Known issues
 
-* Block cursor may look really off due to blending hack that essentially just
-  inverts the character color. It is recommended to replace it with "underline"
-  (see config or GIF demo)
+* Block cursor may look off due to manual blending implementation. It's supposed
+  to look better than it used to now, but if you still don't like it, there
+  is an option to override "block" shape
 * __Wayland compatibility is fixed!__ If you still experience issues, report
   them to #3 and feel free to reopen it
 * Probably more resource consumption when redrawing the frame, but overall the

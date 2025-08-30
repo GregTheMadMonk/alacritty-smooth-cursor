@@ -39,7 +39,8 @@ impl IntoRects for RenderableCursor {
             CursorShape::Beam => beam(x, y, height, thickness, self.color()),
             CursorShape::Underline => underline(x, y, width, height, thickness, self.color()),
             CursorShape::HollowBlock => hollow(x, y, width, height, thickness, self.color()),
-            _ => RenderRect::new_cur(x, y, width, height, self.color(), 1.0).into(),
+            CursorShape::Block => RenderRect::new_cur(x, y, width, height, self.color(), 1.0).into(),
+            CursorShape::Hidden => RenderRect::new_cur(x, y, width, height, self.color(), 0.0).into(),
         }
     }
 }
