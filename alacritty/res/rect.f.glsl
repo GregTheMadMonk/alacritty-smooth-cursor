@@ -156,9 +156,9 @@ void main() {
       col *= (V_our + 0.5f) / V_tgt;
   }
   // Final cursor color
-  vec3 curc = vec3(color.rgb * (1.0f - factor) + col * factor);
+  vec3 curc = mix(color.rgb, col, factor);
   // Blend with opacity
-  FRAG_COLOR = vec4(colr.rgb * (1.0f - color.a) + curc * color.a, 1.0f);
+  FRAG_COLOR = mix(colr, vec4(curc, color.a), color.a);
 #else
   vec2 coord = vec2(gl_FragCoord.x / screenWidth, gl_FragCoord.y / screenHeight);
   FRAG_COLOR = texture(background, coord) * (1 - color.a) + color * color.a;
