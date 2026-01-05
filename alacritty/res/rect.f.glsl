@@ -144,16 +144,19 @@ void main() {
   // If colr is too close to cursor color, either brighten it or dim it to be
   // distinct enough
   vec3 col  = colr.rgb;
-  vec3 diff = (col - color.rgb);
-  // Colors must be separated by 0.5 on the "value" scale
+  // Colors must be separated by _at least_ 0.5 on the "value" scale
   float_t V_our = max(color.r, max(color.g, color.b));
   float_t V_tgt = max(col.r, max(col.g, col.b));
-  if (V_our > 0.5f) {
-      // Bring V_tgt to V_our - 0.5f
-      col *= (V_our - 0.5f) / V_tgt;
-  } else {
-      // Bring V_tgt to V_our + 0.5f
-      col *= (V_our + 0.5f) / V_tgt;
+  // V_tgt == 0 is absolute black and is impossible to "scale" proportionally
+  // so we just leave it be. This works fine as far as I can tell
+  if (V_tgt != 0 && abs(V_our - V_tgt) < 0.5f) {
+      if (V_our > 0.5f) {
+          // Bring V_tgt to V_our - 0.5f
+          col *= (V_our - 0.5f) / V_tgt;
+      } else {
+          // Bring V_tgt to V_our + 0.5f
+          col *= (V_our + 0.5f) / V_tgt;
+      }
   }
   // Final cursor color
   vec3 curc = mix(color.rgb, col, factor);
