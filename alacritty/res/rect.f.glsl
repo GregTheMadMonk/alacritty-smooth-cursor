@@ -1,6 +1,9 @@
 #if defined(GLES2_RENDERER)
 #define float_t mediump float
 #define color_t mediump vec4
+#define color3_t mediump vec3
+#define coord_t mediump vec2
+#define texture texture2D
 #define FRAG_COLOR gl_FragColor
 
 varying color_t color;
@@ -8,6 +11,8 @@ varying color_t color;
 #else
 #define float_t float
 #define color_t vec4
+#define color3_t vec3
+#define coord_t vec2
 
 out vec4 FragColor;
 #define FRAG_COLOR FragColor
@@ -29,7 +34,7 @@ uniform float_t underlineThickness;
 uniform float_t undercurlPosition;
 
 uniform sampler2D background;
-uniform vec3 bgColor;
+uniform color3_t bgColor;
 
 #define PI 3.1415926538
 
@@ -138,32 +143,32 @@ void main() {
 #elif defined(DRAW_DASHED)
   FRAG_COLOR = draw_dashed(x);
 #elif defined(DRAW_INVERTING)
-  vec2 coord = vec2(gl_FragCoord.x / screenWidth, gl_FragCoord.y / screenHeight);
-  vec4 colr = texture(background, coord);
-  float_t factor = length(bgColor / 255.0f - colr.rgb);
+  coord_t coord = vec2(gl_FragCoord.x / screenWidth, gl_FragCoord.y / screenHeight);
+  color_t colr = texture(background, coord);
+  float_t factor = length(bgColor / 255.0 - colr.rgb);
   // If colr is too close to cursor color, either brighten it or dim it to be
   // distinct enough
-  vec3 col  = colr.rgb;
+  color3_t col  = colr.rgb;
   // Colors must be separated by _at least_ 0.5 on the "value" scale
   float_t V_our = max(color.r, max(color.g, color.b));
   float_t V_tgt = max(col.r, max(col.g, col.b));
   // V_tgt == 0 is absolute black and is impossible to "scale" proportionally
   // so we just leave it be. This works fine as far as I can tell
-  if (V_tgt != 0 && abs(V_our - V_tgt) < 0.5f) {
-      if (V_our > 0.5f) {
+  if (V_tgt != 0.0 && abs(V_our - V_tgt) < 0.5) {
+      if (V_our > 0.5) {
           // Bring V_tgt to V_our - 0.5f
-          col *= (V_our - 0.5f) / V_tgt;
+          col *= (V_our - 0.5) / V_tgt;
       } else {
           // Bring V_tgt to V_our + 0.5f
-          col *= (V_our + 0.5f) / V_tgt;
+          col *= (V_our + 0.5) / V_tgt;
       }
   }
   // Final cursor color
-  vec3 curc = mix(color.rgb, col, factor);
+  color3_t curc = mix(color.rgb, col, factor);
   // Blend with opacity
   FRAG_COLOR = mix(colr, vec4(curc, color.a), color.a);
 #else
-  vec2 coord = vec2(gl_FragCoord.x / screenWidth, gl_FragCoord.y / screenHeight);
-  FRAG_COLOR = texture(background, coord) * (1 - color.a) + color * color.a;
+  coord_t coord = vec2(gl_FragCoord.x / screenWidth, gl_FragCoord.y / screenHeight);
+  FRAG_COLOR = texture(background, coord) * (1.0 - color.a) + color * color.a;
 #endif
 }
