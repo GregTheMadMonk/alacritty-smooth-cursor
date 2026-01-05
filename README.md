@@ -53,8 +53,7 @@ smooth_motion_spring = 0.5
 smooth_motion_max_stretch_x = 3.0
 smooth_motion_max_stretch_y = 3.0
 # Override "block" cursor if you don't like how it looks in this fork
-# I prefer "underline"
-block_replace_shape = "underline"
+# block_replace_shape = "underline"
 ```
 _Back to the original README..._
 
