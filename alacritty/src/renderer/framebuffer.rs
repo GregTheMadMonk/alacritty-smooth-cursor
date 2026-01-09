@@ -3,7 +3,7 @@ use crate::gl::types::*;
 
 use crate::renderer::rects::Vertex;
 
-use std::{mem, ptr};
+use std::{mem, ptr, cell::Cell};
 
 #[derive(Debug)]
 pub struct FramebufferRenderer {
@@ -11,6 +11,12 @@ pub struct FramebufferRenderer {
     tex: GLuint,
     vao: GLuint,
     vbo: GLuint,
+
+    width:  GLsizei,
+    height: GLsizei,
+
+    // Framebuffer that was active when the `enable` was called
+    enable_fb: Cell<GLuint>,
 
     vertices: Vec<Vertex>,
 }
@@ -21,6 +27,8 @@ impl FramebufferRenderer {
         let mut tex: GLuint = 0;
         let mut vao: GLuint = 0;
         let mut vbo: GLuint = 0;
+
+        let init_pixels: GLsizei = 128;
 
         let size: f32 = 1.0;
         let vertices = vec![
@@ -43,8 +51,8 @@ impl FramebufferRenderer {
                 gl::TEXTURE_2D,
                 0,
                 gl::RGBA as i32,
-                128,
-                128,
+                init_pixels,
+                init_pixels,
                 0,
                 gl::RGBA,
                 gl::UNSIGNED_BYTE,
@@ -102,16 +110,29 @@ impl FramebufferRenderer {
             gl::BindBuffer(gl::ARRAY_BUFFER, 0);
         }
 
-        Self{ fb, tex, vao, vbo, vertices }
+        Self{
+            fb, tex, vao, vbo,
+            width:  init_pixels,
+            height: init_pixels,
+            enable_fb: Cell::new(0 as GLuint),
+            vertices
+        }
     } // <-- FramebufferRenderer::new()
 
     pub fn resize(&mut self, width: i32, height: i32) {
-        let mut cur_tex: GLint = 0;
-        unsafe {
-            gl::GetIntegerv(gl::TEXTURE_BINDING_2D, &mut cur_tex);
+        if width == self.width && height == self.height {
+            return
+        }
 
-            gl::DeleteTextures(1, &mut self.tex);
-            gl::GenTextures(1, &mut self.tex);
+        let mut cur_tex: GLint = 0;
+        let mut cur_fb:  GLint = 0;
+
+        self.width  = width;
+        self.height = height;
+
+        unsafe {
+            gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut cur_fb);
+            gl::GetIntegerv(gl::TEXTURE_BINDING_2D, &mut cur_tex);
 
             gl::BindFramebuffer(gl::FRAMEBUFFER, self.fb);
 
@@ -135,9 +156,8 @@ impl FramebufferRenderer {
                 gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, self.tex, 0
             );
 
-            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
-
             gl::BindTexture(gl::TEXTURE_2D, cur_tex as GLuint);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, cur_fb as GLuint);
         }
     } // <-- FramebufferRenderer::resize(self, width, height)
 
@@ -182,14 +202,17 @@ impl FramebufferRenderer {
     } // <-- FramebufferRenderer::draw(self)
 
     pub fn enable(&self) {
+        let mut old_fb: GLint = 0;
         unsafe {
+            gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut old_fb);
             gl::BindFramebuffer(gl::FRAMEBUFFER, self.fb);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
+        self.enable_fb.set(old_fb as GLuint);
     } // <-- FramebufferRenderer::enable(self)
 
     pub fn disable(&self) {
-        unsafe { gl::BindFramebuffer(gl::FRAMEBUFFER, 0); }
+        unsafe { gl::BindFramebuffer(gl::FRAMEBUFFER, self.enable_fb.get()); }
     } // <-- FramebufferRenderer::disable(self)
 
     pub fn get_tex(&self) -> GLuint { self.tex }
