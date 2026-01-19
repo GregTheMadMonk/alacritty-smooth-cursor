@@ -16,7 +16,7 @@ use crate::gl::types::*;
 use crate::renderer::shader::{ShaderError, ShaderProgram, ShaderVersion};
 use crate::{gl, renderer};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct RenderRect {
     pub x: f32,
     pub y: f32,

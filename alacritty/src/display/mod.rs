@@ -937,7 +937,8 @@ impl Display {
                         config.cursor.smooth_motion_factor,
                         config.cursor.smooth_motion_spring,
                         config.cursor.smooth_motion_max_stretch_x,
-                        config.cursor.smooth_motion_max_stretch_y
+                        config.cursor.smooth_motion_max_stretch_y,
+                        self.cursor_moving
                     ),
             };
         } else {
