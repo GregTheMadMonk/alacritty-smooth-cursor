@@ -60,8 +60,21 @@ impl CursorRects {
         factor: f32,
         spring: f32,
         max_s_x: f32,
-        max_s_y: f32
+        max_s_y: f32,
+        is_cursor_moving: bool
     ) -> bool {
+        if !is_cursor_moving {
+            // Cursor isn't already moving - we're on a stale frame,
+            // skip interpolation and just check if the cursor should
+            // start moving again
+            for (mine, theirs) in self.rects.iter().zip(other.rects.iter()) {
+                if mine != theirs {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         let mut changed = false;
 
         let adjust = if fps_cur > 0.0 { 60.0 / fps_cur } else { 1.0 };
