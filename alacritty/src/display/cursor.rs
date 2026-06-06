@@ -52,6 +52,29 @@ pub struct CursorRects {
     index: usize,
 }
 
+impl PartialEq for CursorRects {
+    fn eq(&self, other: &Self) -> bool {
+        for (mine, theirs) in self.rects.iter().zip(other.rects.iter()) {
+            let comp = match mine {
+                None          => theirs.is_none(),
+                Some(my_rect) => match theirs {
+                    Some(other_rect) => my_rect.soft_compare(other_rect),
+                    None             => false,
+                },
+            };
+
+            if !comp {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
+impl PartialEq<&mut CursorRects> for CursorRects {
+    fn eq(&self, other: &&mut CursorRects) -> bool { self == *other }
+}
+
 impl CursorRects {
     pub fn interpolate(
         &mut self,
@@ -67,12 +90,7 @@ impl CursorRects {
             // Cursor isn't already moving - we're on a stale frame,
             // skip interpolation and just check if the cursor should
             // start moving again
-            for (mine, theirs) in self.rects.iter().zip(other.rects.iter()) {
-                if mine != theirs {
-                    return true;
-                }
-            }
-            return false;
+            return self != other;
         }
 
         let mut changed = false;

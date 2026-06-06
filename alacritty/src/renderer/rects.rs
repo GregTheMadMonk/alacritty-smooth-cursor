@@ -35,6 +35,22 @@ impl RenderRect {
         RenderRect { kind: RectKind::Inverting, x, y, width, height, color, alpha }
     }
 
+    /// Compare the rects within tolerance
+    pub fn soft_compare(&self, other: &Self) -> bool {
+        if
+            self.x.round() != other.x.round()
+            || self.y.round() != other.y.round()
+            || self.width.round() != other.width.round()
+            || self.height.round() != other.height.round()
+        {
+            return false;
+        }
+
+        return self.color == other.color
+            && self.alpha == other.alpha
+            && self.kind == other.kind;
+    }
+
     pub fn interpolate(
         &self,
         other: &RenderRect,
@@ -44,6 +60,12 @@ impl RenderRect {
         max_s_y: f32,
         changed: &mut bool
     ) -> Self {
+        if self.soft_compare(other) {
+            return *self;
+        }
+
+        *changed = true;
+
         let interp = |x: f32, y: f32, f: f32| x * (1.0 - f) + y * f;
 
         let dx = other.x - self.x;
@@ -53,17 +75,6 @@ impl RenderRect {
         let y1_fac = factor * if dy < 0.0 { 1.0 } else { spring };
         let x2_fac = factor * if dx > 0.0 { 1.0 } else { spring };
         let y2_fac = factor * if dy > 0.0 { 1.0 } else { spring };
-
-        if
-            self.x.round() == other.x.round()
-            && self.y.round() == other.y.round()
-            && self.width.round() == other.width.round()
-            && self.height.round() == other.height.round()
-        {
-            return *self;
-        }
-
-        *changed = true;
 
         let mut x1 = interp(self.x, other.x, x1_fac);
         let mut y1 = interp(self.y, other.y, y1_fac);
