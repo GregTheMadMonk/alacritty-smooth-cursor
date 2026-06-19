@@ -621,7 +621,7 @@ Options introduced by smooth-cursor fork:
 *block_replace_shape* = _<string>_
 
 	The way block cursor is rendered is wacky and might not look the best for
-	every one. This option allows to replace it with any other supported cursor
+	everyone. This option allows to replace it with any other supported cursor
 	shape (I prefer *underline*).
 
 *smooth_motion_max_stretch_x* _<float>_
@@ -631,6 +631,13 @@ Options introduced by smooth-cursor fork:
 *smooth_motion_max_stretch_y* = _<float>_
 
 	Limits how much cursor vertical size may change when moving
+
+*smooth_motion_antijitter_ms* = _<integer>_
+
+	Time in milliseconds between two closest updates of the smooth cursor target
+	position. Supposed to help with flickering in some interactive TUIs.
+
+	Default: _50_
 
 # TERMINAL
 
