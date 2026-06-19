@@ -52,6 +52,8 @@ smooth_motion_spring = 0.5
 # Limits how the cursor size may change
 smooth_motion_max_stretch_x = 3.0
 smooth_motion_max_stretch_y = 3.0
+# Supposed to help with flickering in some TUIs, keep it low (`man alacritty.5`)
+smooth_motion_antijitter_ms = 50
 # Override "block" cursor if you don't like how it looks in this fork
 # block_replace_shape = "underline"
 ```

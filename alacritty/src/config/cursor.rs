@@ -24,6 +24,7 @@ pub struct Cursor {
     pub smooth_motion_spring: f32,
     pub smooth_motion_max_stretch_x: f32,
     pub smooth_motion_max_stretch_y: f32,
+    pub smooth_motion_antijitter_ms: i32,
 
     block_replace_shape: Option<ConfigCursorStyle>,
 
@@ -42,6 +43,7 @@ impl Default for Cursor {
             smooth_motion_spring: 0.8,
             smooth_motion_max_stretch_x: 3.0,
             smooth_motion_max_stretch_y: 2.0,
+            smooth_motion_antijitter_ms: 50,
             block_replace_shape: None,
             blink_interval: 750,
             blink_timeout: 5,

@@ -418,6 +418,13 @@ impl RenderableCursor {
         Self { shape, cursor_color, text_color: cursor_color, width, point }
     }
 
+    pub fn visual_changed(&self, other: &Self) -> bool {
+        return self.point != other.point
+            || self.shape != other.shape
+            || self.cursor_color != other.cursor_color
+            || self.width != other.width;
+    }
+
     pub fn color(&self) -> Rgb {
         self.cursor_color
     }

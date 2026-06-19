@@ -399,8 +399,13 @@ pub struct Display {
     glyph_cache: GlyphCache,
     meter: Meter,
 
-    // Old cursor
-    cursor_rects: Option<CursorRects>,
+    // Smooth cursor stuff
+    // Only point from the cursor that the motion targets
+    cursor_tgt:             RenderableCursor,
+    // Time in ms before the cursor target can update its position
+    cursor_tgt_next_upd_ms: i32,
+    // Current display rects for the smoothed cursor
+    cursor_rects:           Option<CursorRects>,
 
     pub cursor_moving: bool,
     last_frame_cursor_start: Instant,
@@ -546,6 +551,13 @@ impl Display {
             cursor_hidden: Default::default(),
             meter: Default::default(),
             ime: Default::default(),
+            cursor_tgt: RenderableCursor::new(
+                Default::default(),
+                CursorShape::Hidden,
+                Rgb::default(),
+                NonZeroU32::new(1).unwrap()
+            ),
+            cursor_tgt_next_upd_ms: 0,
             cursor_rects: None,
             cursor_moving: true,
             last_frame_cursor_start: Instant::now(),
@@ -915,23 +927,42 @@ impl Display {
         self.renderer.end_fb();
         self.renderer.draw_fb();
 
+        // Collect some timing data
+        let now   = Instant::now();
+        let delta = now - self.last_frame_cursor_start;
+        // Don't count secs: we don't expect FPS < 1
+        let fps   = 1e9 / f64::from(delta.subsec_nanos());
+        self.last_frame_cursor_start = now;
+
+        let mut cursor_moving = false;
+
         // Draw cursor.
         let block_rep_shape = config.cursor.block_replace_shape().map(|x| x.shape);
-        let new_cur_rects =
-            cursor.rects(&size_info, config.cursor.thickness(), block_rep_shape);
+
+        let new_cur_rects = if config.cursor.smooth_motion {
+            if self.cursor_tgt_next_upd_ms >= 0 {
+                self.cursor_tgt_next_upd_ms -= delta.subsec_millis() as i32;
+            }
+            if self.cursor_tgt.visual_changed(&cursor) {
+                cursor_moving |= true;
+                if self.cursor_tgt_next_upd_ms <= 0 {
+                    self.cursor_tgt = cursor;
+                    self.cursor_tgt_next_upd_ms = config.cursor.smooth_motion_antijitter_ms;
+                }
+            }
+            self.cursor_tgt
+        } else {
+            cursor
+        }.rects(&size_info, config.cursor.thickness(), block_rep_shape);
+
         if config.cursor.smooth_motion {
-            let now   = Instant::now();
-            let delta = now - self.last_frame_cursor_start;
-            // Don't count secs: we don't expect FPS < 1
-            let fps   = 1e9 / f64::from(delta.subsec_nanos());
-            self.last_frame_cursor_start = now;
             match self.cursor_rects {
                 None => {
-                    self.cursor_moving = true;
+                    cursor_moving |= true;
                     self.cursor_rects = Some(new_cur_rects);
                 },
                 Some(ref mut crcts) =>
-                    self.cursor_moving = crcts.interpolate(
+                    cursor_moving |= crcts.interpolate(
                         &new_cur_rects,
                         fps as f32,
                         config.cursor.smooth_motion_factor,
@@ -941,6 +972,7 @@ impl Display {
                         self.cursor_moving
                     ),
             };
+            self.cursor_moving = cursor_moving;
         } else {
             self.cursor_rects = Some(new_cur_rects);
         }
